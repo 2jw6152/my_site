@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>할 일 목록</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .unchecked {
+            background-color: plum;
+            color: white;
+        }
+
+        .checked {
+            background-color: teal;
+            color: white;
+            text-decoration: line-through;
+        }
+
+        .checkbox {
+            width: 20px;
+            height: 20px;
+        }
+
+        .add-task {
+            cursor: pointer;
+            color: blue;
+            text-decoration: underline;
+            margin-top: 10px;
+        }
+
+        .current-date {
+            background-color: red;
+            color: white;
+        }
+
+        .gray {
+            background-color: #ccc;
+        }
+
+        .date-section {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: mistyrose;
+        }
+
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        .calendar-cell {
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background-color: #f5f5f5;
+            color: black !important;
+        }
+
+        .calendar-cell:hover {
+            background-color: #e0e0e0;
+        }
+
+        .calendar-cell.active {
+            background-color: orange;
+            color: white;
+        }
+
+        .current-date {
+            background-color: hotpink;
+            color: white;
+        }
+
+        .other-date {
+            background-color: khaki;
+            color: white;
+        }
+
+        .calendar-cell.active:hover {
+            background-color: orange;  
+        }
+
+        #add-task-form {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            background-color: lightblue;
+            padding: 10px;
+        }
+
+        #add-task-form input[type="date"],
+        #add-task-form input[type="text"] {
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+
+        #add-task-form button[type="submit"] {
+            padding: 5px 10px;
+            background-color: dodgerblue;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #add-task-form button[type="submit"]:hover {
+            background-color: deepskyblue;
+        }
+
+        .task-count {
+            font-weight: bold;
+        }
+
+        .meals {
+            /* position: fixed; */
+            /* bottom: 0; */
+            width: 100%;
+            height: 150px;
+            background-color: #f2f2f2;
+            overflow-y: auto;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('input[type="checkbox"]').change(function() {
+                var date = $(this).data('date');
+                var index = $(this).data('index');
+                var isChecked = $(this).prop('checked');
+                $.post('/check', { date: date, index: index, isChecked: isChecked });
+                $(this).closest('tr').find('td:first-child').toggleClass('checked', isChecked);
+                updateTaskCount(date);
+            });
+
+            $('.add-task').click(function() {
+                var date = $(this).data('date');
+                var task = prompt('할 일을 입력하세요:');
+                if (task) {
+                    $.post('/', { date: date, task: task }).done(function() {
+                        location.reload();
+                    });
+                }
+            });
+
+            $('.calendar-cell').click(function() {
+                var date = $(this).data('date');
+                $('html, body').animate({
+                    scrollTop: $('#date-' + date).offset().top
+                }, 500);
+            });
+
+            $('.date-section .task-list tbody tr').each(function() {
+                var date = $(this).closest('.date-section').attr('id').replace('date-', '');
+                updateTaskCount(date);
+            });
+
+            function updateTaskCount(date) {
+                var count = $('#date-' + date + ' .task-list tbody tr').length;
+                var completedCount = $('#date-' + date + ' .task-list tbody tr .checkbox:checked').length;
+                var remainingCount = count - completedCount - 1;
+                $('#date-' + date + ' .task-count').text(remainingCount);
+                $('#calendar-cell-' + date + ' .task-count').text(remainingCount); // 달력 날짜 아래에 할 일 개수 업데이트
+            }
+        });
+    </script>
+</head>
+<body>
+    <div id="add-task-form">
+        <form method="POST">
+            <label for="date">날짜:</label>
+            <input type="date" id="date" name="date" required>
+            <label for="task">할 일:</label>
+            <input type="text" id="task" name="task" required>
+            <button type="submit">추가</button>
+        </form>
+    </div>
+    <div class="calendar">
+        {% for date in dates %}
+            <div id="calendar-cell-{{ date.strftime('%Y-%m-%d') }}" class="calendar-cell {% if date == today %}current-date{% elif date != today %}other-date{% endif %}" data-date="{{ date.strftime('%Y-%m-%d') }}">
+                {{ date.strftime('%Y-%m-%d') }}
+                <span class="task-count"></span>
+            </div>
+        {% endfor %}
+    </div>
+    {% for date in dates %}
+        <div id="date-{{ date.strftime('%Y-%m-%d') }}" class="date-section">
+            <h2 class="{% if date == today %}current-date{% endif %}">{{ date.strftime('%Y-%m-%d') }}</h2>
+            {% if todos[date.strftime('%Y-%m-%d')] %}
+                <table class="task-list">
+                    <thead>
+                        <tr>
+                            <th>할 일</th>
+                            <th>완료</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in todos[date.strftime('%Y-%m-%d')] %}
+                            <tr>
+                                <td class="{% if task['done'] %}checked{% else %}unchecked{% endif %}">{{ task['task'] }}</td>
+                                <td>
+                                    <input type="checkbox" class="checkbox" data-date="{{ date.strftime('%Y-%m-%d') }}" data-index="{{ loop.index0 }}"
+                                        {% if task['done'] %}checked{% endif %}>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        <tr>    
+                            <td colspan="2">
+                                <p class="add-task" data-date="{{ date.strftime('%Y-%m-%d') }}">+ 할 일 추가</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            {% else %}
+                <p>할 일이 없습니다.</p>
+                <p class="add-task" data-date="{{ date.strftime('%Y-%m-%d') }}">+ 할 일 추가</p>
+            {% endif %}
+        </div>
+    {% endfor %}
+    <div class="meals">
+        <h3>조식</h3>
+        <p>{{ breakfast }}</p>
+      
+        <h3>중식</h3>
+        <p>{{ lunch }}</p>
+      
+        <h3>석식</h3>
+        <p>{{ dinner }}</p>
+    </div>
+
+</body>
+</html>
